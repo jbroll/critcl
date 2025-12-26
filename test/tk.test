@@ -1,0 +1,75 @@
+# -*- tcl -*-
+# -------------------------------------------------------------------------
+# critcl::tk tests
+# Test that Tk packages can be built without linker errors
+# -------------------------------------------------------------------------
+
+source [file join [file dirname [info script]] support testutilities.tcl]
+
+testsNeedTcl     8.6 9
+testsNeedTcltest 2
+
+# -------------------------------------------------------------------------
+# Test that critcl::tk packages build without multiple definition errors
+# This tests the fix for the tkStubsPtr multiple definition bug
+#
+# We use the critcl app via exec to test package mode (-pkg) which
+# triggers the multi-file generation that exposed the bug.
+
+test critcl-tk-1.0 {tk package builds without linker errors} -setup {
+    set testdir [makeDirectory critcl-tk-test]
+    set testfile [file join $testdir tktest.tcl]
+
+    # Create a minimal Tk critcl package
+    set fd [open $testfile w]
+    puts $fd {
+        package require Tcl 8.6
+        package require critcl 3.2
+        critcl::tcl 8.6
+        critcl::tk
+        critcl::cproc tktest_hello {} void {
+            /* Just a minimal proc to test Tk package builds */
+        }
+        package provide tktest 1.0
+    }
+    close $fd
+
+    # Find local critcl lib directory
+    set critcllib [file normalize [file join [file dirname [info script]] .. lib]]
+} -body {
+    # Build as a package using critcl -pkg
+    # This triggers multi-file generation where the tkStubsPtr bug occurred
+    # Set TCLLIBPATH before exec so the subprocess uses local critcl
+    set saved_tcllibpath [expr {[info exists ::env(TCLLIBPATH)] ? $::env(TCLLIBPATH) : ""}]
+    set ::env(TCLLIBPATH) $critcllib
+    set code [catch {
+        exec [info nameofexecutable] << "
+            package require critcl::app
+            critcl::app::main \[list -pkg $testfile\]
+        " 2>@1
+    } result]
+    if {$saved_tcllibpath eq ""} {
+        unset -nocomplain ::env(TCLLIBPATH)
+    } else {
+        set ::env(TCLLIBPATH) $saved_tcllibpath
+    }
+
+    # Check for linker errors
+    if {[string match "*multiple definition*" $result]} {
+        return "FAIL: multiple definition error"
+    }
+    if {[string match "*critcl build failed*" $result]} {
+        return "FAIL: build failed"
+    }
+    return "ok"
+} -cleanup {
+    removeDirectory critcl-tk-test
+} -result {ok}
+
+# -------------------------------------------------------------------------
+testsuiteCleanup
+
+# Local variables:
+# mode: tcl
+# indent-tabs-mode: nil
+# End:
