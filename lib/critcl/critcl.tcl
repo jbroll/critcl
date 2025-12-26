@@ -4799,17 +4799,36 @@ proc ::critcl::TclIncludes {file} {
     # windows, for free.
 
     set hdrs tcl[MinTclVersion $file]
-    set path [file join $v::hdrdir $hdrs]
+    set srcpath [file join $v::hdrdir $hdrs]
 
-    if {[file system $path] ne "native"} {
-	# The critcl package is wrapped. Copy the relevant headers out
-	# to disk and change the include path appropriately.
-
-	Copy $path [cache]
-	set path [file join [cache] $hdrs]
+    # Check if system X11 headers are available
+    set systemX11 0
+    foreach dir {/usr/include /usr/local/include /opt/X11/include} {
+	if {[file exists [file join $dir X11 Xlib.h]]} {
+	    set systemX11 1
+	    break
+	}
     }
 
-    return [list $c::include$path $c::include$v::hdrdir]
+    # Always create per-compile cache directory with Tcl/Tk headers
+    # Only include X11 stubs if system X11 is not available
+    set cachename $hdrs
+    if {$systemX11} {
+	append cachename "-noX11"
+    }
+    set cachepath [file join [cache] $cachename]
+
+    if {![file exists $cachepath]} {
+	file mkdir $cachepath
+	foreach f [glob -nocomplain -directory $srcpath *] {
+	    set fname [file tail $f]
+	    # Skip X11 stubs if system X11 is available
+	    if {$fname eq "X11" && $systemX11} continue
+	    file copy $f $cachepath
+	}
+    }
+
+    return [list $c::include$cachepath $c::include$v::hdrdir]
 }
 
 proc ::critcl::TclHeader {file {header {}}} {
