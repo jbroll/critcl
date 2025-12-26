@@ -4809,7 +4809,17 @@ proc ::critcl::TclIncludes {file} {
 	set path [file join [cache] $hdrs]
     }
 
-    return [list $c::include$path $c::include$v::hdrdir]
+    # On Unix/Linux, use -idirafter so critcl's bundled headers (including
+    # X11 stubs) are searched AFTER system headers. This allows code to
+    # #include <X11/Xlib.h> and get the real system X11 headers instead of
+    # critcl's stubs (which are only needed on Windows and macOS).
+    # On Windows/macOS, use -I as before since the X11 stubs are required.
+    if {[string match "win32-*" $v::buildplatform] ||
+	[string match "macosx-*" $v::buildplatform]} {
+	return [list $c::include$path $c::include$v::hdrdir]
+    } else {
+	return [list -idirafter$path -idirafter$v::hdrdir]
+    }
 }
 
 proc ::critcl::TclHeader {file {header {}}} {
