@@ -4721,7 +4721,11 @@ proc ::critcl::CollectEmbeddedSources {file destination libfile ininame placestu
     }
 
     if {[UsingTk $file]} {
-	SetupTkStubs $fd $mintcl
+	if {$placestubs} {
+	    SetupTkStubs $fd $mintcl
+	} else {
+	    SetupTkStubsExtern $fd
+	}
     }
 
     # Initialization boilerplate. This ends in the middle of the
@@ -5174,6 +5178,14 @@ proc ::critcl::SetupTkStubs {fd mintcl} {
 	set contents [Cat [Template tkstubs.c]]
     }
 
+    puts -nonewline $fd $contents
+    return
+}
+
+proc ::critcl::SetupTkStubsExtern {fd} {
+    # Extern/stub version for sub-packages. The main package init
+    # will have the full Tk stubs initialization.
+    set contents [Cat [Template tkstubs_e.c]]
     puts -nonewline $fd $contents
     return
 }
